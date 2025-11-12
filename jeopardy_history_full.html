@@ -1,0 +1,148 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jeopardy – Seven Years’ War Review</title>
+<style>
+  :root{
+    --bg:#0b1021; --panel:#121942; --card:#1a237e;
+    --accent:#ffd54f; --accent2:#64b5f6; --good:#66bb6a; --bad:#ef5350;
+    --text:#e8eaf6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:radial-gradient(1000px 600px at 50% -200px,#1e2a7a 0%,#0b1021 60%); color:var(--text)}
+  header{padding:16px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px; background:linear-gradient(180deg,rgba(255,255,255,.04),transparent)}
+  h1{margin:0; font-size:clamp(20px,3vw,28px); letter-spacing:.5px}
+  .controls{display:flex; gap:8px; flex-wrap:wrap}
+  button, select, input{background:var(--panel); color:var(--text); border:1px solid rgba(255,255,255,.1); padding:10px 12px; border-radius:12px; font-weight:600}
+  button:hover{filter:brightness(1.1)}
+  button:active{transform:translateY(1px)}
+  main{padding:16px; max-width:1200px; margin:auto}
+  .board{display:grid; grid-template-columns:repeat(6,1fr); gap:10px}
+  .category{background:linear-gradient(180deg,#1a237e,#0d154f); border-radius:14px; padding:10px; text-align:center; font-weight:800; text-transform:uppercase; min-height:70px; display:flex; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,.15)}
+  .tile{background:linear-gradient(180deg,#152064,#0d154f); border-radius:14px; height:90px; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:900; color:var(--accent); border:1px solid rgba(255,255,255,.15); cursor:pointer}
+  .tile.used{opacity:.25; text-decoration:line-through}
+  .modal{position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.65); padding:20px}
+  .modal.show{display:grid}
+  .card{background:linear-gradient(180deg,#0f1540,#0b1028); border:1px solid rgba(255,255,255,.12); border-radius:18px; max-width:900px; width:min(900px,95vw); overflow:hidden; box-shadow:0 20px 70px rgba(0,0,0,.5)}
+  .qhead{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.08)}
+  .qbody{padding:24px; font-size:clamp(18px,2.2vw,28px); line-height:1.35}
+  .qfooter{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:12px 14px; border-top:1px solid rgba(255,255,255,.08)}
+  .value{font-weight:900; color:var(--accent)}
+  .answer{display:none; margin-top:16px; padding:16px; border:1px dashed rgba(255,255,255,.25); border-radius:12px; background:rgba(255,255,255,.04)}
+  .answer.show{display:block}
+  .teams{display:flex; gap:10px; flex-wrap:wrap}
+  .team{background:var(--panel); padding:10px 12px; border-radius:12px; display:flex; align-items:center; gap:8px}
+  .team input{width:100px}
+  .pill{padding:6px 10px; border-radius:999px; font-weight:800}
+  .good{background:rgba(102,187,106,.15); border:1px solid rgba(102,187,106,.5)}
+  .bad{background:rgba(239,83,80,.15); border:1px solid rgba(239,83,80,.5)}
+  .small{opacity:.8; font-size:12px}
+  .help{opacity:.75}
+  .foot{max-width:1200px; margin:16px auto; padding:0 16px; font-size:12px; opacity:.7}
+  .sr{position:absolute; height:1px; width:1px; overflow:hidden; clip:rect(1px,1px,1px,1px)}
+  @media (max-width:900px){ .board{grid-template-columns:repeat(3,1fr)} }
+</style>
+</head>
+<body>
+<header>
+  <h1>Jeopardy – Seven Years’ War Review</h1>
+  <div class="controls">
+    <button id="fsBtn" title="Toggle fullscreen">Fullscreen</button>
+    <button id="resetBtn" title="Reset board & scores">Reset</button>
+    <label class="help small"><input type="checkbox" id="ddCheck"> Add one Daily Double</label>
+    <select id="teamCount" title="Teams">
+      <option value="0">No Teams</option>
+      <option value="2" selected>2 Teams</option>
+      <option value="3">3 Teams</option>
+      <option value="4">4 Teams</option>
+    </select>
+  </div>
+</header>
+<main>
+  <section class="teams" id="teams"></section>
+  <section class="board" id="board" aria-label="Jeopardy board"></section>
+</main>
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="qTitle">
+  <div class="card">
+    <div class="qhead">
+      <div><strong id="qCat">Category</strong> • <span class="value" id="qVal">$100</span></div>
+      <div class="help small">Press <kbd>Space</kbd> to reveal, <kbd>Enter</kbd> to award (+), <kbd>Esc</kbd> to close</div>
+    </div>
+    <div class="qbody">
+      <div id="qText">Question text…</div>
+      <div class="answer" id="qAnswer" aria-live="polite"><strong>Answer:</strong> <span id="aText"></span></div>
+    </div>
+    <div class="qfooter">
+      <div class="teams" id="award"></div>
+      <div>
+        <button id="revealBtn">Reveal Answer</button>
+        <button id="closeBtn">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="foot help">Content adapted for classroom review. Keyboard: Space = reveal, Enter = award (+), Shift+Enter = deduct (−), Esc = close.</p>
+<script>
+const categories = [
+  { name: "Causes of War", q:[
+    {v:100,q:"This economic system was a long-term cause of the Seven Years’ War.",a:"What is mercantilism?"},
+    {v:200,q:"Competition for this resource-rich region fueled conflict.",a:"What is the Ohio Valley?"},
+    {v:300,q:"This European rivalry was a major short-term cause.",a:"What is Britain vs France?"},
+    {v:400,q:"Colonial expansion was driven by this economic motive.",a:"What is trade dominance?"},
+    {v:500,q:"This global conflict is considered the first world war.",a:"What is the Seven Years’ War?"}
+  ]},
+  { name: "Impact on First Nations", q:[
+    {v:100,q:"First Nations allied with this European power during the war.",a:"Who are the French?"},
+    {v:200,q:"This leader organized resistance after the war.",a:"Who is Chief Pontiac?"},
+    {v:300,q:"The Royal Proclamation of 1763 aimed to protect these lands.",a:"What are Indigenous territories?"},
+    {v:400,q:"First Nations lost this after British victory.",a:"What is military leverage?"},
+    {v:500,q:"This term describes the British policy toward Indigenous trade post-war.",a:"What is assimilation?"}
+  ]},
+  { name: "Impact on French", q:[
+    {v:100,q:"France ceded this colony to Britain in 1763.",a:"What is New France?"},
+    {v:200,q:"This treaty ended the Seven Years’ War.",a:"What is the Treaty of Paris?"},
+    {v:300,q:"French settlers retained this right under British rule.",a:"What is Catholic religion?"},
+    {v:400,q:"This act restored French civil law.",a:"What is the Quebec Act?"},
+    {v:500,q:"French influence persisted in this cultural aspect.",a:"What is language?"}
+  ]},
+  { name: "Key Events & Figures", q:[
+    {v:100,q:"This battle marked the British victory in 1759.",a:"What is the Battle of the Plains of Abraham?"},
+    {v:200,q:"He led British forces at Quebec.",a:"Who is General Wolfe?"},
+    {v:300,q:"He commanded French forces at Quebec.",a:"Who is Montcalm?"},
+    {v:400,q:"This year marked the end of the war.",a:"What is 1763?"},
+    {v:500,q:"This uprising followed British victory.",a:"What is Pontiac’s Rebellion?"}
+  ]},
+  { name: "Treaties & Laws", q:[
+    {v:100,q:"This treaty ended the Seven Years’ War.",a:"What is the Treaty of Paris?"},
+    {v:200,q:"This proclamation restricted colonial expansion.",a:"What is the Royal Proclamation of 1763?"},
+    {v:300,q:"This act restored French civil law.",a:"What is the Quebec Act?"},
+    {v:400,q:"This law aimed to assimilate Indigenous peoples.",a:"What is the Indian Act?"},
+    {v:500,q:"This agreement divided North America between Britain and France.",a:"What is the Treaty of Utrecht?"}
+  ]}
+];
+
+let state = { scores: [], used: new Set(), dailyDouble: null };
+const boardEl=document.getElementById('board');const teamsEl=document.getElementById('teams');const awardEl=document.getElementById('award');const teamCountSel=document.getElementById('teamCount');
+function buildBoard(){boardEl.innerHTML='';categories.forEach(c=>{const h=document.createElement('div');h.className='category';h.textContent=c.name;boardEl.appendChild(h);});const rows=5;for(let r=0;r<rows;r++){categories.forEach((c,ci)=>{const t=document.createElement('button');const q=c.q[r];t.className='tile';t.textContent=`$${q.v}`;t.dataset.ci=ci;t.dataset.ri=r;const key=`${ci}-${r}`;if(state.used.has(key))t.classList.add('used');t.addEventListener('click',()=>openQuestion(ci,r));boardEl.appendChild(t);});}}
+function buildTeams(){const n=+teamCountSel.value;state.scores=Array.from({length:n},(_,i)=>state.scores[i]??0);teamsEl.innerHTML='';for(let i=0;i<n;i++){const box=document.createElement('div');box.className='team';box.innerHTML=`<span class="pill" style="background:rgba(100,181,246,.15);border:1px solid rgba(100,181,246,.5)">Team ${i+1}</span><strong class="score">${state.scores[i]}</strong><button data-delta="-100">−100</button><button data-delta="100">+100</button>`;box.querySelectorAll('button').forEach(btn=>{btn.addEventListener('click',()=>{const delta=+btn.dataset.delta;state.scores[i]+=delta;renderScores();});});teamsEl.appendChild(box);}}
+function renderScores(){document.querySelectorAll('.team .score').forEach((el,i)=>el.textContent=state.scores[i]);}
+const modal=document.getElementById('modal');const qCat=document.getElementById('qCat');const qVal=document.getElementById('qVal');const qText=document.getElementById('qText');const qAnswer=document.getElementById('qAnswer');const aText=document.getElementById('aText');const revealBtn=document.getElementById('revealBtn');const closeBtn=document.getElementById('closeBtn');const ddCheck=document.getElementById('ddCheck');let current=null;
+function openQuestion(ci,ri){const key=`${ci}-${ri}`;if(state.used.has(key))return;const cat=categories[ci];const item=cat.q[ri];current={ci,ri};qCat.textContent=cat.name;qVal.textContent=`$${item.v}`;qText.textContent=(state.dailyDouble===key)?`DAILY DOUBLE! Wager up to your team's score.
+Question: ${item.q}`:item.q;aText.textContent=item.a;qAnswer.classList.remove('show');buildAward(item.v);modal.classList.add('show');}
+function buildAward(value){awardEl.innerHTML='';const n=state.scores.length;for(let i=0;i<n;i++){const wrap=document.createElement('div');wrap.className='team';const add=document.createElement('button');add.className='good';add.textContent=`Team ${i+1} +${value}`;const sub=document.createElement('button');sub.className='bad';sub.textContent=`Team ${i+1} −${value}`;add.addEventListener('click',()=>{state.scores[i]+=value;renderScores();markUsed();closeModal();});sub.addEventListener('click',()=>{state.scores[i]-=value;renderScores();markUsed();closeModal();});wrap.appendChild(add);wrap.appendChild(sub);awardEl.appendChild(wrap);}}
+function markUsed(){if(!current)return;const key=`${current.ci}-${current.ri}`;state.used.add(key);const tile=[...document.querySelectorAll('.tile')].find(t=>t.dataset.ci==current.ci&&t.dataset.ri==current.ri);if(tile)tile.classList.add('used');}
+function closeModal(){modal.classList.remove('show');current=null;}
+revealBtn.addEventListener('click',()=>qAnswer.classList.toggle('show'));closeBtn.addEventListener('click',closeModal);
+window.addEventListener('keydown',e=>{if(!modal.classList.contains('show'))return;const cat=categories[current?.ci||0];const item=cat?.q[current?.ri||0];const val=item?.v||0;const n=state.scores.length;if(e.code==='Space'){e.preventDefault();qAnswer.classList.toggle('show');}if(e.code==='Enter'){e.preventDefault();if(n>0){state.scores[0]+=val;renderScores();}markUsed();closeModal();}if(e.shiftKey&&e.code==='Enter'){e.preventDefault();if(n>0){state.scores[0]-=val;renderScores();}markUsed();closeModal();}if(e.code==='Escape'){e.preventDefault();closeModal();}});
+const fsBtn=document.getElementById('fsBtn');fsBtn.addEventListener('click',()=>{if(document.fullscreenElement){document.exitFullscreen();}else{document.documentElement.requestFullscreen();}});
+document.getElementById('resetBtn').addEventListener('click',()=>{if(!confirm('Reset the board and scores?'))return;state.used.clear();const n=state.scores.length;state.scores=Array.from({length:n},()=>0);state.dailyDouble=null;ddCheck.checked=false;buildBoard();buildTeams();renderScores();});
+teamCountSel.addEventListener('change',()=>{buildTeams();renderScores();});
+ddCheck.addEventListener('change',()=>{state.dailyDouble=ddCheck.checked?pickDailyDouble():null;});
+function pickDailyDouble(){const allKeys=[];for(let ci=0;ci<categories.length;ci++){for(let ri=0;ri<5;ri++){allKeys.push(`${ci}-${ri}`)}}return allKeys[Math.floor(Math.random()*allKeys.length)];}
+(function init(){buildBoard();buildTeams();renderScores();})();
+</script>
+</body>
+</html>
